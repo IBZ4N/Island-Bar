@@ -1,7 +1,12 @@
 <?php
 require_once 'config.php';
 
-if (!isset($_SESSION['user_id'])) {
+// Secure Session Handling
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_name'])) {
     header('Location: login.php');
     exit;
 }
@@ -9,11 +14,22 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 $user_name = $_SESSION['user_name'];
 
+// CSRF Protection
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $action = $_GET['action'] ?? 'view';
 $message = '';
 $message_type = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Validate CSRF Token
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        header('Location: catalogo.php?message=' . urlencode('Error de seguridad: Token inválido') . '&type=error');
+        exit;
+    }
+
     $action = $_POST['action'] ?? '';
     
     if ($action === 'add_categoria') {
@@ -36,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Categoría agregada correctamente';
                     $message_type = 'success';
                 } else {
-                    $message = 'Error al agregar categoría: ' . $conn->error;
+                    $message = 'Error al agregar categoría';
                     $message_type = 'error';
                 }
                 $stmt->close();
@@ -47,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    if ($action === 'edit_categoria') {
+    elseif ($action === 'edit_categoria') {
         $id = intval($_POST['id'] ?? 0);
         $nombre = trim($_POST['nombre'] ?? '');
         if ($id > 0 && !empty($nombre)) {
@@ -68,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Categoría actualizada correctamente';
                     $message_type = 'success';
                 } else {
-                    $message = 'Error al actualizar categoría: ' . $conn->error;
+                    $message = 'Error al actualizar categoría';
                     $message_type = 'error';
                 }
                 $stmt->close();
@@ -79,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    if ($action === 'delete_categoria') {
+    elseif ($action === 'delete_categoria') {
         $id = intval($_POST['id'] ?? 0);
         if ($id > 0) {
             $check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM productos WHERE categoria_id = ?");
@@ -99,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Categoría eliminada correctamente';
                     $message_type = 'success';
                 } else {
-                    $message = 'Error al eliminar categoría: ' . $conn->error;
+                    $message = 'Error al eliminar categoría';
                     $message_type = 'error';
                 }
                 $stmt->close();
@@ -107,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    if ($action === 'add_producto') {
+    elseif ($action === 'add_producto') {
         $nombre = trim($_POST['nombre'] ?? '');
         $descripcion = trim($_POST['descripcion'] ?? '');
         $precio = floatval($_POST['precio'] ?? 0);
@@ -120,26 +136,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt->execute()) {
                 $producto_id = $conn->insert_id;
                 if (!empty($url_imagen)) {
-                    $check_img = $conn->prepare("SELECT id FROM imagenes_productos WHERE producto_id = ?");
-                    $check_img->bind_param("i", $producto_id);
-                    $check_img->execute();
-                    $result = $check_img->get_result();
-                    
-                    if ($result->num_rows > 0) {
-                        $img_stmt = $conn->prepare("UPDATE imagenes_productos SET url_imagen = ? WHERE producto_id = ?");
-                        $img_stmt->bind_param("si", $url_imagen, $producto_id);
-                    } else {
-                        $img_stmt = $conn->prepare("INSERT INTO imagenes_productos (producto_id, url_imagen) VALUES (?, ?)");
-                        $img_stmt->bind_param("is", $producto_id, $url_imagen);
-                    }
+                    $img_stmt = $conn->prepare("INSERT INTO imagenes_productos (producto_id, url_imagen) VALUES (?, ?)");
+                    $img_stmt->bind_param("is", $producto_id, $url_imagen);
                     $img_stmt->execute();
                     $img_stmt->close();
-                    $check_img->close();
                 }
                 $message = 'Producto agregado correctamente';
                 $message_type = 'success';
             } else {
-                $message = 'Error al agregar producto: ' . $conn->error;
+                $message = 'Error al agregar producto';
                 $message_type = 'error';
             }
             $stmt->close();
@@ -149,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    if ($action === 'edit_producto') {
+    elseif ($action === 'edit_producto') {
         $id = intval($_POST['id'] ?? 0);
         $nombre = trim($_POST['nombre'] ?? '');
         $descripcion = trim($_POST['descripcion'] ?? '');
@@ -181,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = 'Producto actualizado correctamente';
                 $message_type = 'success';
             } else {
-                $message = 'Error al actualizar producto: ' . $conn->error;
+                $message = 'Error al actualizar producto';
                 $message_type = 'error';
             }
             $stmt->close();
@@ -191,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    if ($action === 'delete_producto') {
+    elseif ($action === 'delete_producto') {
         $id = intval($_POST['id'] ?? 0);
         if ($id > 0) {
             $img_stmt = $conn->prepare("DELETE FROM imagenes_productos WHERE producto_id = ?");
@@ -205,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = 'Producto eliminado correctamente';
                 $message_type = 'success';
             } else {
-                $message = 'Error al eliminar producto: ' . $conn->error;
+                $message = 'Error al eliminar producto';
                 $message_type = 'error';
             }
             $stmt->close();
@@ -217,15 +222,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if (isset($_GET['message'])) {
-    $message = $_GET['message'];
-    $message_type = $_GET['type'] ?? 'success';
+    $message = htmlspecialchars($_GET['message'], ENT_QUOTES, 'UTF-8');
+    $allowed_types = ['success', 'error', 'warning', 'info'];
+    $type_input = $_GET['type'] ?? 'success';
+    $message_type = in_array($type_input, $allowed_types) ? $type_input : 'success';
 }
 
 $categorias = [];
 $cat_query = "SELECT * FROM categoria ORDER BY nombre";
-$cat_result = $conn->query($cat_query);
-if ($cat_result) {
-    $categorias = $cat_result->fetch_all(MYSQLI_ASSOC);
+$cat_stmt = $conn->prepare($cat_query);
+if ($cat_stmt) {
+    $cat_stmt->execute();
+    $cat_result = $cat_stmt->get_result();
+    if ($cat_result) {
+        $categorias = $cat_result->fetch_all(MYSQLI_ASSOC);
+    }
+    $cat_stmt->close();
 }
 
 $productos = [];
@@ -234,9 +246,14 @@ $prod_query = "SELECT p.*, c.nombre as categoria_nombre,
                FROM productos p 
                LEFT JOIN categoria c ON p.categoria_id = c.id 
                ORDER BY p.id DESC";
-$prod_result = $conn->query($prod_query);
-if ($prod_result) {
-    $productos = $prod_result->fetch_all(MYSQLI_ASSOC);
+$prod_stmt = $conn->prepare($prod_query);
+if ($prod_stmt) {
+    $prod_stmt->execute();
+    $prod_result = $prod_stmt->get_result();
+    if ($prod_result) {
+        $productos = $prod_result->fetch_all(MYSQLI_ASSOC);
+    }
+    $prod_stmt->close();
 }
 ?>
 <!DOCTYPE html>
@@ -296,7 +313,7 @@ if ($prod_result) {
                 <div class="user-info">
                     <div class="user-avatar"><?php echo strtoupper(substr($user_name, 0, 1)); ?></div>
                     <div class="user-details">
-                        <div class="user-name"><?php echo htmlspecialchars($user_name); ?></div>
+                        <div class="user-name"><?php echo htmlspecialchars($user_name, ENT_QUOTES, 'UTF-8'); ?></div>
                         <div class="user-role">Administrador</div>
                     </div>
                 </div>
@@ -322,8 +339,8 @@ if ($prod_result) {
             </header>
             
             <?php if ($message): ?>
-                <div class="alert alert-<?php echo $message_type; ?> neon-glow">
-                    <?php echo htmlspecialchars($message); ?>
+                <div class="alert alert-<?php echo htmlspecialchars($message_type, ENT_QUOTES, 'UTF-8'); ?> neon-glow">
+                    <?php echo $message; // Already sanitized ?>
                 </div>
             <?php endif; ?>
             
@@ -352,13 +369,14 @@ if ($prod_result) {
                         <tbody>
                             <?php foreach ($categorias as $cat): ?>
                                 <tr>
-                                    <td><?php echo $cat['id']; ?></td>
-                                    <td><?php echo htmlspecialchars($cat['nombre']); ?></td>
+                                    <td><?php echo htmlspecialchars($cat['id'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                    <td><?php echo htmlspecialchars($cat['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
                                     <td class="actions">
-                                        <a href="editar.catalogo.php?tipo=categoria&id=<?php echo $cat['id']; ?>" class="btn-edit" title="Editar">EDITAR</a>
+                                        <a href="editar.catalogo.php?tipo=categoria&id=<?php echo htmlspecialchars($cat['id'], ENT_QUOTES, 'UTF-8'); ?>" class="btn-edit" title="Editar">EDITAR</a>
                                         <form method="POST" style="display:inline;" onsubmit="return confirm('¿Está seguro de eliminar esta categoría?');">
                                             <input type="hidden" name="action" value="delete_categoria">
-                                            <input type="hidden" name="id" value="<?php echo $cat['id']; ?>">
+                                            <input type="hidden" name="id" value="<?php echo htmlspecialchars($cat['id'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <button type="submit" class="btn-delete" title="Eliminar">ELIMINAR</button>
                                         </form>
                                     </td>
@@ -401,23 +419,24 @@ if ($prod_result) {
                         <tbody>
                             <?php foreach ($productos as $prod): ?>
                                 <tr>
-                                    <td><?php echo $prod['id']; ?></td>
+                                    <td><?php echo htmlspecialchars($prod['id'], ENT_QUOTES, 'UTF-8'); ?></td>
                                     <td>
                                         <div class="product-image-thumb">
-                                            <img src="assets/<?php echo htmlspecialchars($prod['imagen'] ?? 'palmera_neon_blanca.png'); ?>" 
-                                                 alt="<?php echo htmlspecialchars($prod['nombre']); ?>"
+                                            <img src="assets/<?php echo htmlspecialchars(basename($prod['imagen'] ?? 'palmera_neon_blanca.png'), ENT_QUOTES, 'UTF-8'); ?>" 
+                                                 alt="<?php echo htmlspecialchars($prod['nombre'], ENT_QUOTES, 'UTF-8'); ?>"
                                                  onerror="this.src='assets/palmera_neon_blanca.png';">
                                         </div>
                                     </td>
-                                    <td><?php echo htmlspecialchars($prod['nombre']); ?></td>
-                                    <td><?php echo htmlspecialchars(substr($prod['descripcion'] ?? '', 0, 50)) . (strlen($prod['descripcion'] ?? '') > 50 ? '...' : ''); ?></td>
-                                    <td><?php echo htmlspecialchars($prod['categoria_nombre'] ?? 'Sin categoría'); ?></td>
+                                    <td><?php echo htmlspecialchars($prod['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                    <td><?php echo htmlspecialchars(substr($prod['descripcion'] ?? '', 0, 50), ENT_QUOTES, 'UTF-8') . (strlen($prod['descripcion'] ?? '') > 50 ? '...' : ''); ?></td>
+                                    <td><?php echo htmlspecialchars($prod['categoria_nombre'] ?? 'Sin categoría', ENT_QUOTES, 'UTF-8'); ?></td>
                                     <td>$<?php echo number_format($prod['precio'], 0, ',', '.'); ?></td>
                                     <td class="actions">
-                                        <a href="editar.catalogo.php?tipo=producto&id=<?php echo $prod['id']; ?>" class="btn-edit" title="Editar">EDITAR</a>
+                                        <a href="editar.catalogo.php?tipo=producto&id=<?php echo htmlspecialchars($prod['id'], ENT_QUOTES, 'UTF-8'); ?>" class="btn-edit" title="Editar">EDITAR</a>
                                         <form method="POST" style="display:inline;" onsubmit="return confirm('¿Está seguro de eliminar este producto?');">
                                             <input type="hidden" name="action" value="delete_producto">
-                                            <input type="hidden" name="id" value="<?php echo $prod['id']; ?>">
+                                            <input type="hidden" name="id" value="<?php echo htmlspecialchars($prod['id'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <button type="submit" class="btn-delete" title="Eliminar">ELIMINAR</button>
                                         </form>
                                     </td>
@@ -438,6 +457,7 @@ if ($prod_result) {
             </div>
             <form method="POST" class="modal-form">
                 <input type="hidden" name="action" value="add_categoria">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="form-group">
                     <label>Nombre</label>
                     <input type="text" name="nombre" required class="neon-input">
@@ -458,6 +478,7 @@ if ($prod_result) {
             </div>
             <form method="POST" class="modal-form">
                 <input type="hidden" name="action" value="edit_categoria">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="id" id="edit-categoria-id">
                 <div class="form-group">
                     <label>Nombre</label>
@@ -479,6 +500,7 @@ if ($prod_result) {
             </div>
             <form method="POST" class="modal-form">
                 <input type="hidden" name="action" value="add_producto">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="form-group">
                     <label>Nombre</label>
                     <input type="text" name="nombre" required class="neon-input">
@@ -492,7 +514,7 @@ if ($prod_result) {
                     <select name="categoria_id" required class="neon-input">
                         <option value="">Seleccionar categoría</option>
                         <?php foreach ($categorias as $cat): ?>
-                            <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['nombre']); ?></option>
+                            <option value="<?php echo htmlspecialchars($cat['id'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($cat['nombre'], ENT_QUOTES, 'UTF-8'); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -521,6 +543,7 @@ if ($prod_result) {
             </div>
             <form method="POST" class="modal-form">
                 <input type="hidden" name="action" value="edit_producto">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="id" id="edit-producto-id">
                 <div class="form-group">
                     <label>Nombre</label>
@@ -535,7 +558,7 @@ if ($prod_result) {
                     <select name="categoria_id" id="edit-producto-categoria" required class="neon-input">
                         <option value="">Seleccionar categoría</option>
                         <?php foreach ($categorias as $cat): ?>
-                            <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['nombre']); ?></option>
+                            <option value="<?php echo htmlspecialchars($cat['id'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($cat['nombre'], ENT_QUOTES, 'UTF-8'); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -633,4 +656,3 @@ if ($prod_result) {
     </script>
 </body>
 </html>
-
