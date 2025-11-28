@@ -1,6 +1,23 @@
 <?php
 require_once 'config.php';
 
+// Constants for SonarQube S1192 Compliance
+const MSG_TYPE_SUCCESS = 'success';
+const MSG_TYPE_ERROR = 'error';
+const MSG_COMPLETE_FIELDS = 'Por favor completa todos los campos requeridos';
+const LABEL_CATEGORIA = 'Categoría';
+const LABEL_NOMBRE = 'Nombre';
+const LABEL_PRECIO = 'Precio';
+const LABEL_DESCRIPCION = 'Descripción';
+const LABEL_URL_IMAGEN = 'URL Imagen (nombre del archivo en assets/)';
+
+const ACTION_ADD_CATEGORIA = 'add_categoria';
+const ACTION_EDIT_CATEGORIA = 'edit_categoria';
+const ACTION_DELETE_CATEGORIA = 'delete_categoria';
+const ACTION_ADD_PRODUCTO = 'add_producto';
+const ACTION_EDIT_PRODUCTO = 'edit_producto';
+const ACTION_DELETE_PRODUCTO = 'delete_producto';
+
 // Secure Session Handling
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -26,13 +43,13 @@ $message_type = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validate CSRF Token
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        header('Location: catalogo.php?message=' . urlencode('Error de seguridad: Token inválido') . '&type=error');
+        header('Location: catalogo.php?message=' . urlencode('Error de seguridad: Token inválido') . '&type=' . MSG_TYPE_ERROR);
         exit;
     }
 
     $action = $_POST['action'] ?? '';
     
-    if ($action === 'add_categoria') {
+    if ($action === ACTION_ADD_CATEGORIA) {
         $nombre = trim($_POST['nombre'] ?? '');
         if (!empty($nombre)) {
             $check_stmt = $conn->prepare("SELECT id FROM categoria WHERE nombre = ?");
@@ -42,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($result->num_rows > 0) {
                 $message = 'Ya existe una categoría con ese nombre';
-                $message_type = 'error';
+                $message_type = MSG_TYPE_ERROR;
                 $check_stmt->close();
             } else {
                 $check_stmt->close();
@@ -50,20 +67,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->bind_param("s", $nombre);
                 if ($stmt->execute()) {
                     $message = 'Categoría agregada correctamente';
-                    $message_type = 'success';
+                    $message_type = MSG_TYPE_SUCCESS;
                 } else {
                     $message = 'Error al agregar categoría';
-                    $message_type = 'error';
+                    $message_type = MSG_TYPE_ERROR;
                 }
                 $stmt->close();
             }
         } else {
             $message = 'El nombre de la categoría no puede estar vacío';
-            $message_type = 'error';
+            $message_type = MSG_TYPE_ERROR;
         }
     }
     
-    elseif ($action === 'edit_categoria') {
+    elseif ($action === ACTION_EDIT_CATEGORIA) {
         $id = intval($_POST['id'] ?? 0);
         $nombre = trim($_POST['nombre'] ?? '');
         if ($id > 0 && !empty($nombre)) {
@@ -74,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($result->num_rows > 0) {
                 $message = 'Ya existe otra categoría con ese nombre';
-                $message_type = 'error';
+                $message_type = MSG_TYPE_ERROR;
                 $check_stmt->close();
             } else {
                 $check_stmt->close();
@@ -82,20 +99,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->bind_param("si", $nombre, $id);
                 if ($stmt->execute()) {
                     $message = 'Categoría actualizada correctamente';
-                    $message_type = 'success';
+                    $message_type = MSG_TYPE_SUCCESS;
                 } else {
                     $message = 'Error al actualizar categoría';
-                    $message_type = 'error';
+                    $message_type = MSG_TYPE_ERROR;
                 }
                 $stmt->close();
             }
         } else {
-            $message = 'Por favor completa todos los campos requeridos';
-            $message_type = 'error';
+            $message = MSG_COMPLETE_FIELDS;
+            $message_type = MSG_TYPE_ERROR;
         }
     }
     
-    elseif ($action === 'delete_categoria') {
+    elseif ($action === ACTION_DELETE_CATEGORIA) {
         $id = intval($_POST['id'] ?? 0);
         if ($id > 0) {
             $check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM productos WHERE categoria_id = ?");
@@ -107,23 +124,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($row['count'] > 0) {
                 $message = 'No se puede eliminar la categoría porque tiene productos asociados';
-                $message_type = 'error';
+                $message_type = MSG_TYPE_ERROR;
             } else {
                 $stmt = $conn->prepare("DELETE FROM categoria WHERE id = ?");
                 $stmt->bind_param("i", $id);
                 if ($stmt->execute()) {
                     $message = 'Categoría eliminada correctamente';
-                    $message_type = 'success';
+                    $message_type = MSG_TYPE_SUCCESS;
                 } else {
                     $message = 'Error al eliminar categoría';
-                    $message_type = 'error';
+                    $message_type = MSG_TYPE_ERROR;
                 }
                 $stmt->close();
             }
         }
     }
     
-    elseif ($action === 'add_producto') {
+    elseif ($action === ACTION_ADD_PRODUCTO) {
         $nombre = trim($_POST['nombre'] ?? '');
         $descripcion = trim($_POST['descripcion'] ?? '');
         $precio = floatval($_POST['precio'] ?? 0);
@@ -142,19 +159,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $img_stmt->close();
                 }
                 $message = 'Producto agregado correctamente';
-                $message_type = 'success';
+                $message_type = MSG_TYPE_SUCCESS;
             } else {
                 $message = 'Error al agregar producto';
-                $message_type = 'error';
+                $message_type = MSG_TYPE_ERROR;
             }
             $stmt->close();
         } else {
-            $message = 'Por favor completa todos los campos requeridos';
-            $message_type = 'error';
+            $message = MSG_COMPLETE_FIELDS;
+            $message_type = MSG_TYPE_ERROR;
         }
     }
     
-    elseif ($action === 'edit_producto') {
+    elseif ($action === ACTION_EDIT_PRODUCTO) {
         $id = intval($_POST['id'] ?? 0);
         $nombre = trim($_POST['nombre'] ?? '');
         $descripcion = trim($_POST['descripcion'] ?? '');
@@ -184,19 +201,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $check_img->close();
                 }
                 $message = 'Producto actualizado correctamente';
-                $message_type = 'success';
+                $message_type = MSG_TYPE_SUCCESS;
             } else {
                 $message = 'Error al actualizar producto';
-                $message_type = 'error';
+                $message_type = MSG_TYPE_ERROR;
             }
             $stmt->close();
         } else {
-            $message = 'Por favor completa todos los campos requeridos';
-            $message_type = 'error';
+            $message = MSG_COMPLETE_FIELDS;
+            $message_type = MSG_TYPE_ERROR;
         }
     }
     
-    elseif ($action === 'delete_producto') {
+    elseif ($action === ACTION_DELETE_PRODUCTO) {
         $id = intval($_POST['id'] ?? 0);
         if ($id > 0) {
             $img_stmt = $conn->prepare("DELETE FROM imagenes_productos WHERE producto_id = ?");
@@ -208,10 +225,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param("i", $id);
             if ($stmt->execute()) {
                 $message = 'Producto eliminado correctamente';
-                $message_type = 'success';
+                $message_type = MSG_TYPE_SUCCESS;
             } else {
                 $message = 'Error al eliminar producto';
-                $message_type = 'error';
+                $message_type = MSG_TYPE_ERROR;
             }
             $stmt->close();
         }
@@ -223,9 +240,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if (isset($_GET['message'])) {
     $message = htmlspecialchars($_GET['message'], ENT_QUOTES, 'UTF-8');
-    $allowed_types = ['success', 'error', 'warning', 'info'];
-    $type_input = $_GET['type'] ?? 'success';
-    $message_type = in_array($type_input, $allowed_types) ? $type_input : 'success';
+    $allowed_types = [MSG_TYPE_SUCCESS, MSG_TYPE_ERROR, 'warning', 'info'];
+    $type_input = $_GET['type'] ?? MSG_TYPE_SUCCESS;
+    $message_type = in_array($type_input, $allowed_types) ? $type_input : MSG_TYPE_SUCCESS;
 }
 
 $categorias = [];
@@ -354,7 +371,7 @@ if ($prod_stmt) {
                         <button class="export-btn-small" onclick="exportData('pdf', 'categorias')" title="Exportar Categorías PDF">
                             PDF
                         </button>
-                        <a href="agregar.catalogo.php?tipo=categoria" class="neon-button-small">+ Agregar Categoría</a>
+                        <a href="agregar.catalogo.php?tipo=categoria" class="neon-button-small">+ Agregar <?php echo LABEL_CATEGORIA; ?></a>
                     </div>
                 </div>
                 <div class="table-container neon-card">
@@ -362,7 +379,7 @@ if ($prod_stmt) {
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Nombre</th>
+                                <th><?php echo LABEL_NOMBRE; ?></th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -374,7 +391,7 @@ if ($prod_stmt) {
                                     <td class="actions">
                                         <a href="editar.catalogo.php?tipo=categoria&id=<?php echo htmlspecialchars($cat['id'], ENT_QUOTES, 'UTF-8'); ?>" class="btn-edit" title="Editar">EDITAR</a>
                                         <form method="POST" style="display:inline;" onsubmit="return confirm('¿Está seguro de eliminar esta categoría?');">
-                                            <input type="hidden" name="action" value="delete_categoria">
+                                            <input type="hidden" name="action" value="<?php echo ACTION_DELETE_CATEGORIA; ?>">
                                             <input type="hidden" name="id" value="<?php echo htmlspecialchars($cat['id'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <button type="submit" class="btn-delete" title="Eliminar">ELIMINAR</button>
@@ -409,10 +426,10 @@ if ($prod_stmt) {
                             <tr>
                                 <th>ID</th>
                                 <th>Imagen</th>
-                                <th>Nombre</th>
-                                <th>Descripción</th>
-                                <th>Categoría</th>
-                                <th>Precio</th>
+                                <th><?php echo LABEL_NOMBRE; ?></th>
+                                <th><?php echo LABEL_DESCRIPCION; ?></th>
+                                <th><?php echo LABEL_CATEGORIA; ?></th>
+                                <th><?php echo LABEL_PRECIO; ?></th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -434,7 +451,7 @@ if ($prod_stmt) {
                                     <td class="actions">
                                         <a href="editar.catalogo.php?tipo=producto&id=<?php echo htmlspecialchars($prod['id'], ENT_QUOTES, 'UTF-8'); ?>" class="btn-edit" title="Editar">EDITAR</a>
                                         <form method="POST" style="display:inline;" onsubmit="return confirm('¿Está seguro de eliminar este producto?');">
-                                            <input type="hidden" name="action" value="delete_producto">
+                                            <input type="hidden" name="action" value="<?php echo ACTION_DELETE_PRODUCTO; ?>">
                                             <input type="hidden" name="id" value="<?php echo htmlspecialchars($prod['id'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <button type="submit" class="btn-delete" title="Eliminar">ELIMINAR</button>
@@ -452,14 +469,14 @@ if ($prod_stmt) {
     <div id="modal-add-categoria" class="modal">
         <div class="modal-content neon-card">
             <div class="modal-header">
-                <h3>Agregar Categoría</h3>
+                <h3>Agregar <?php echo LABEL_CATEGORIA; ?></h3>
                 <button class="modal-close" onclick="closeModal('modal-add-categoria')">&times;</button>
             </div>
             <form method="POST" class="modal-form">
-                <input type="hidden" name="action" value="add_categoria">
+                <input type="hidden" name="action" value="<?php echo ACTION_ADD_CATEGORIA; ?>">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="form-group">
-                    <label>Nombre</label>
+                    <label><?php echo LABEL_NOMBRE; ?></label>
                     <input type="text" name="nombre" required class="neon-input">
                 </div>
                 <div class="form-actions">
@@ -473,15 +490,15 @@ if ($prod_stmt) {
     <div id="modal-edit-categoria" class="modal">
         <div class="modal-content neon-card">
             <div class="modal-header">
-                <h3>Editar Categoría</h3>
+                <h3>Editar <?php echo LABEL_CATEGORIA; ?></h3>
                 <button class="modal-close" onclick="closeModal('modal-edit-categoria')">&times;</button>
             </div>
             <form method="POST" class="modal-form">
-                <input type="hidden" name="action" value="edit_categoria">
+                <input type="hidden" name="action" value="<?php echo ACTION_EDIT_CATEGORIA; ?>">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="id" id="edit-categoria-id">
                 <div class="form-group">
-                    <label>Nombre</label>
+                    <label><?php echo LABEL_NOMBRE; ?></label>
                     <input type="text" name="nombre" id="edit-categoria-nombre" required class="neon-input">
                 </div>
                 <div class="form-actions">
@@ -499,18 +516,18 @@ if ($prod_stmt) {
                 <button class="modal-close" onclick="closeModal('modal-add-producto')">&times;</button>
             </div>
             <form method="POST" class="modal-form">
-                <input type="hidden" name="action" value="add_producto">
+                <input type="hidden" name="action" value="<?php echo ACTION_ADD_PRODUCTO; ?>">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="form-group">
-                    <label>Nombre</label>
+                    <label><?php echo LABEL_NOMBRE; ?></label>
                     <input type="text" name="nombre" required class="neon-input">
                 </div>
                 <div class="form-group">
-                    <label>Descripción</label>
+                    <label><?php echo LABEL_DESCRIPCION; ?></label>
                     <textarea name="descripcion" class="neon-input" rows="3"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Categoría</label>
+                    <label><?php echo LABEL_CATEGORIA; ?></label>
                     <select name="categoria_id" required class="neon-input">
                         <option value="">Seleccionar categoría</option>
                         <?php foreach ($categorias as $cat): ?>
@@ -519,11 +536,11 @@ if ($prod_stmt) {
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Precio</label>
+                    <label><?php echo LABEL_PRECIO; ?></label>
                     <input type="number" name="precio" step="0.01" min="0" required class="neon-input">
                 </div>
                 <div class="form-group">
-                    <label>URL Imagen (nombre del archivo en assets/)</label>
+                    <label><?php echo LABEL_URL_IMAGEN; ?></label>
                     <input type="text" name="url_imagen" class="neon-input" placeholder="ej: producto.jpg">
                     <small style="opacity: 0.7; font-size: 12px; display: block; margin-top: 5px;">Opcional: Dejar vacío para usar imagen por defecto</small>
                 </div>
@@ -542,19 +559,19 @@ if ($prod_stmt) {
                 <button class="modal-close" onclick="closeModal('modal-edit-producto')">&times;</button>
             </div>
             <form method="POST" class="modal-form">
-                <input type="hidden" name="action" value="edit_producto">
+                <input type="hidden" name="action" value="<?php echo ACTION_EDIT_PRODUCTO; ?>">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="id" id="edit-producto-id">
                 <div class="form-group">
-                    <label>Nombre</label>
+                    <label><?php echo LABEL_NOMBRE; ?></label>
                     <input type="text" name="nombre" id="edit-producto-nombre" required class="neon-input">
                 </div>
                 <div class="form-group">
-                    <label>Descripción</label>
+                    <label><?php echo LABEL_DESCRIPCION; ?></label>
                     <textarea name="descripcion" id="edit-producto-descripcion" class="neon-input" rows="3"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Categoría</label>
+                    <label><?php echo LABEL_CATEGORIA; ?></label>
                     <select name="categoria_id" id="edit-producto-categoria" required class="neon-input">
                         <option value="">Seleccionar categoría</option>
                         <?php foreach ($categorias as $cat): ?>
@@ -563,11 +580,11 @@ if ($prod_stmt) {
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Precio</label>
+                    <label><?php echo LABEL_PRECIO; ?></label>
                     <input type="number" name="precio" id="edit-producto-precio" step="0.01" min="0" required class="neon-input">
                 </div>
                 <div class="form-group">
-                    <label>URL Imagen (nombre del archivo en assets/)</label>
+                    <label><?php echo LABEL_URL_IMAGEN; ?></label>
                     <input type="text" name="url_imagen" id="edit-producto-imagen" class="neon-input" placeholder="ej: producto.jpg">
                     <small style="opacity: 0.7; font-size: 12px;">Dejar vacío para mantener imagen actual</small>
                 </div>
